@@ -5,10 +5,12 @@
  * using X-API-Key header for authentication.
  */
 
-import { httpBase, apiKey } from "@/lib/config";
+import { httpBase, getApiKey } from "@/lib/config";
 
 const BASE = httpBase();
-const AUTH_HEADER = { 'X-API-Key': apiKey };
+function getAuthHeaders(): Record<string, string> {
+  return { 'X-API-Key': getApiKey() };
+}
 
 export interface SessionInfo {
   id: string;
@@ -67,7 +69,7 @@ export interface GetHistoryResponse {
 export async function listSessions(limit = 20, offset = 0, signal?: AbortSignal): Promise<ListSessionsResponse> {
   const res = await fetch(
     `${BASE}/api/sessions?limit=${limit}&offset=${offset}`,
-    { headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' }, signal }
+    { headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, signal }
   );
   if (!res.ok) throw new Error(`listSessions failed: ${res.status}`);
   return res.json();
@@ -85,7 +87,7 @@ export async function createSession(opts: CreateSessionOptions, signal?: AbortSi
   if (opts.workDir) {
     url += `&work_dir=${encodeURIComponent(opts.workDir)}`;
   }
-  const res = await fetch(url, { method: 'POST', headers: AUTH_HEADER, signal });
+  const res = await fetch(url, { method: 'POST', headers: getAuthHeaders(), signal });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(body || `createSession failed: ${res.status}`);
@@ -96,7 +98,7 @@ export async function createSession(opts: CreateSessionOptions, signal?: AbortSi
 export async function deleteSession(id: string, signal?: AbortSignal): Promise<void> {
   const res = await fetch(
     `${BASE}/api/sessions/${id}`,
-    { method: 'DELETE', headers: AUTH_HEADER, signal }
+    { method: 'DELETE', headers: getAuthHeaders(), signal }
   );
   if (!res.ok) throw new Error(`deleteSession failed: ${res.status}`);
 }
@@ -113,7 +115,7 @@ export async function getSessionHistory(
   if (options?.beforeId) {
     url += `&before_id=${options.beforeId}`;
   }
-  const res = await fetch(url, { headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' }, signal: options?.signal });
+  const res = await fetch(url, { headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, signal: options?.signal });
   if (!res.ok) throw new Error(`getSessionHistory failed: ${res.status}`);
   return res.json();
 }

@@ -301,10 +301,10 @@ export interface ServerCaps {
 // ============================================================================
 
 export interface HotPlexClientConfig {
-  url: string;
+  url: string | (() => string);
   workerType: WorkerType;
-  apiKey?: string;
-  authToken?: string;
+  apiKey?: string | (() => string);
+  authToken?: string | (() => string);
   reconnect?: ReconnectConfig;
   heartbeat?: HeartbeatConfig;
   /** Per-session init config forwarded to the gateway in the AEP init handshake. */

@@ -160,6 +160,11 @@ export class BrowserHotPlexClient extends EventEmitter<BrowserClientEvents> {
     };
   }
 
+  /** Resolve a config value that may be a getter function. */
+  private _resolve<T>(value: T | (() => T)): T {
+    return typeof value === 'function' ? (value as () => T)() : value;
+  }
+
   // ============================================================================
   // Public Getters
   // ============================================================================
@@ -204,8 +209,9 @@ export class BrowserHotPlexClient extends EventEmitter<BrowserClientEvents> {
           prevWs.close();
         }
 
-        // Build URL without api_key — auth is passed via auth.token in init envelope.
-        const url = this.config.url;
+        // Resolve dynamic url and authToken at connect time.
+        const url = this._resolve(this.config.url);
+        const authToken = this._resolve(this.config.authToken ?? "");
 
         this.ws = new WebSocket(url);
 
@@ -213,7 +219,7 @@ export class BrowserHotPlexClient extends EventEmitter<BrowserClientEvents> {
           sessionId,
           this.config.workerType,
           this.config.initConfig,
-          this.config.authToken,
+          authToken,
         );
 
         const onOpen = () => {

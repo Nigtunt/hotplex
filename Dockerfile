@@ -28,8 +28,9 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata
 
-# Copy go.mod first for better cache
+# Copy module files first for layer caching (client/ needed for replace directive)
 COPY go.mod go.sum ./
+COPY client/go.mod client/go.sum ./client/
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
@@ -71,8 +72,10 @@ LABEL description="HotPlex Worker Gateway - AI Coding Agent access layer"
 # - git: required by coding agents
 # - nodejs & npm: for Claude Code
 # - python3: for STT server
+# - bash: required by Claude Code CLI (POSIX shell)
 # - sqlite: for database backups
 RUN apk add --no-cache \
+    bash \
     ca-certificates \
     curl \
     tzdata \
@@ -84,10 +87,8 @@ RUN apk add --no-cache \
     sqlite \
     && rm -rf /var/cache/apk/*
 
-# Install Claude Code CLI (optional, can also be mounted or installed via env)
-# Note: We don't pre-install it to keep the image size down, 
-# but we provide the environment.
-# RUN npm install -g @anthropic-ai/claude-code
+# Install Claude Code CLI globally (npm prefix set for hotplex user)
+RUN npm install -g @anthropic-ai/claude-code
 
 # Create non-root user
 RUN addgroup -g 1000 hotplex \
@@ -119,6 +120,7 @@ EXPOSE 8888 9999
 ENV HOTPLEX_CONFIG=/etc/hotplex/config.yaml
 ENV HOTPLEX_DATA_DIR=/var/lib/hotplex/data
 ENV HOTPLEX_LOG_DIR=/var/log/hotplex
+ENV SHELL=/bin/bash
 ENV PATH="/usr/local/bin:/home/hotplex/.npm-global/bin:${PATH}"
 
 # Switch to non-root user

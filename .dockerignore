@@ -2,8 +2,9 @@
 .git
 .gitignore
 
-# Documentation
+# Documentation (source only; compiled output in internal/docs/out/ is included)
 docs/
+!internal/docs/out/
 *.md
 !README.md
 
@@ -45,13 +46,12 @@ logs/
 *.db-wal
 *.db-shm
 
-# Config (keep templates only)
+# Config (keep templates only; config.yaml needed for go:embed)
 configs/*.yaml
+!configs/config.yaml
 configs/*.json
-!configs/config.yaml.example
 
-# Scripts (not needed in runtime)
-scripts/
+# Scripts (included in runtime image for STT/utilities)
 
 # CI/CD
 .github/

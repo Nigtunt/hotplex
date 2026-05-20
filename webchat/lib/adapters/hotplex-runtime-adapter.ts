@@ -10,7 +10,7 @@ import type { ExternalStoreAdapter, ThreadMessageLike, AppendMessage } from '@as
 import { BrowserHotPlexClient } from '@/lib/ai-sdk-transport';
 import type { InitConfig, ContextUsageData, PermissionRequestData, QuestionRequestData, ElicitationRequestData } from '@/lib/ai-sdk-transport/client/types';
 import { WorkerStdioCommand } from '@/lib/ai-sdk-transport/client/constants';
-import { wsUrl, workerType, apiKey, workDir, allowedTools, type ConnectionState } from '@/lib/config';
+import { wsUrl, workerType, apiKey, workDir, allowedTools, getApiKey, getWsUrl, type ConnectionState } from '@/lib/config';
 import { useMetrics } from '@/lib/hooks/useMetrics';
 import { getSessionHistory, type ConversationRecord } from '@/lib/api/sessions';
 import { conversationTurnsToMessages } from '@/lib/utils/turn-replay';
@@ -304,10 +304,10 @@ export function useHotPlexRuntime({
     if (allowedTools.length > 0) initConfig.allowed_tools = allowedTools;
 
     const client = new BrowserHotPlexClient({
-      url: wsUrl,
+      url: () => getWsUrl(),
       workerType,
-      apiKey,
-      authToken: apiKey, // pass via init envelope auth.token for deferred auth
+      apiKey: () => getApiKey(),
+      authToken: () => getApiKey(), // pass via init envelope auth.token for deferred auth
       initConfig,
       heartbeat: {
         pingIntervalMs: 20000,
