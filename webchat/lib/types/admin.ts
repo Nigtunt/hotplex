@@ -87,6 +87,18 @@ export interface CronJob {
   expires_at?: string;
 }
 
+/** Fields accepted when creating or updating a cron job (no server-managed fields). */
+export interface CronJobInput {
+  name: string;
+  schedule: string;
+  message: string;
+  bot_id: string;
+  owner_id: string;
+  enabled: boolean;
+  max_runs?: number;
+  expires_at?: string;
+}
+
 export interface TurnStatItem {
   turn_num: number;
   seq: number;

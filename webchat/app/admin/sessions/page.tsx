@@ -4,14 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { listSessions, terminateSession, deleteSession } from '@/lib/api/admin-sessions';
 import type { AdminSessionInfo } from '@/lib/types/admin';
+import { formatRelativeTime } from '@/lib/format-time';
+import { getErrorMessage } from '@/lib/get-error-message';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-type SessionState = AdminSessionInfo['state'];
+const SESSION_STATES = ['active', 'working', 'idle', 'terminated', 'error'] as const;
+type SessionState = (typeof SESSION_STATES)[number];
+type FilterOption = 'all' | SessionState;
 
-const SESSION_STATUS_MAP: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+const SESSION_STATUS_MAP: Record<SessionState, { bg: string; text: string; dot: string; label: string }> = {
   active: {
     bg: 'rgba(52, 211, 153, 0.12)',
     text: 'text-[var(--accent-emerald)]',
@@ -51,7 +55,6 @@ const DEFAULT_SESSION_STYLE = {
   label: '',
 };
 
-type FilterOption = 'all' | SessionState;
 type SortOption = 'last_active' | 'created';
 
 function truncateId(id: string): string {
@@ -59,29 +62,12 @@ function truncateId(id: string): string {
   return `${id.slice(0, 8)}...${id.slice(-4)}`;
 }
 
-function formatTime(iso?: string): string {
-  if (!iso) return '--';
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHour = Math.floor(diffMs / 3600000);
-  const diffDay = Math.floor(diffMs / 86400000);
-
-  if (diffSec < 60) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 // ---------------------------------------------------------------------------
 // Session Status Badge (extends base StatusBadge for session-specific states)
 // ---------------------------------------------------------------------------
 
 function SessionStatusBadge({ state }: { state: string }) {
-  const style = SESSION_STATUS_MAP[state] ?? DEFAULT_SESSION_STYLE;
+  const style = SESSION_STATUS_MAP[state as SessionState] ?? DEFAULT_SESSION_STYLE;
   const label = style.label || state;
 
   return (
@@ -107,6 +93,7 @@ export default function SessionsPage() {
   const [sort, setSort] = useState<SortOption>('last_active');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  const [actionError, setActionError] = useState<string | null>(null);
   const [confirmTerminate, setConfirmTerminate] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -156,12 +143,13 @@ export default function SessionsPage() {
     setConfirmTerminate(null);
     try {
       setActionLoading(id);
+      setActionError(null);
       await terminateSession(id);
       setSessions((prev) =>
         prev.map((s) => (s.id === id ? { ...s, state: 'terminated' } : s)),
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to terminate session');
+      setActionError(getErrorMessage(err, 'Failed to terminate session'));
     } finally {
       setActionLoading(null);
     }
@@ -171,10 +159,11 @@ export default function SessionsPage() {
     setConfirmDelete(null);
     try {
       setActionLoading(id);
+      setActionError(null);
       await deleteSession(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete session');
+      setActionError(getErrorMessage(err, 'Failed to delete session'));
     } finally {
       setActionLoading(null);
     }
@@ -238,6 +227,19 @@ export default function SessionsPage() {
             </button>
           </div>
         </div>
+
+        {/* Action error banner */}
+        {actionError && (
+          <div className="mb-4 rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-3 flex items-center justify-between animate-fade-in">
+            <p className="text-sm text-[var(--accent-coral)]">{actionError}</p>
+            <button
+              onClick={() => setActionError(null)}
+              className="text-xs font-medium text-[var(--accent-coral)] underline underline-offset-2 hover:text-[var(--accent-coral)]/80 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -348,12 +350,12 @@ export default function SessionsPage() {
 
                 {/* Created */}
                 <span className="text-xs text-[var(--text-muted)]" title={session.created_at}>
-                  {formatTime(session.created_at)}
+                  {formatRelativeTime(session.created_at)}
                 </span>
 
                 {/* Last active */}
                 <span className="text-xs text-[var(--text-muted)]" title={session.updated_at}>
-                  {formatTime(session.updated_at)}
+                  {formatRelativeTime(session.updated_at)}
                 </span>
 
                 {/* Actions */}

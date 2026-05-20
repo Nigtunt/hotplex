@@ -7,20 +7,9 @@ import { getBot } from '@/lib/api/admin-bots';
 import { BotConfigEditor } from '@/components/admin/bot-config-editor';
 import { SystemPromptPreview } from '@/components/admin/system-prompt-preview';
 import { StatusBadge } from '@/components/admin/status-badge';
+import { InfoRow } from '@/components/admin/info-row';
+import { getErrorMessage } from '@/lib/get-error-message';
 import type { BotConfigEntry } from '@/lib/types/admin';
-
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-      <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">
-        {label}
-      </p>
-      <p className={`text-sm text-[var(--text-primary)] ${mono ? 'font-mono' : ''} break-all`}>
-        {value || '—'}
-      </p>
-    </div>
-  );
-}
 
 type TabKey = 'overview' | 'config' | 'access';
 
@@ -50,7 +39,7 @@ export function BotDetailView() {
         if (!cancelled) setBot(data);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(String(err));
+        if (!cancelled) setError(getErrorMessage(err, 'Failed to load bot'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

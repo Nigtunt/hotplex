@@ -4,36 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { listCronJobs, updateCronJob, deleteCronJob, triggerCronJob, getCronRunHistory } from '@/lib/api/admin-cron';
-import type { CronJob, TurnStats } from '@/lib/types/admin';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-      <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">
-        {label}
-      </p>
-      <p className={`text-sm text-[var(--text-primary)] ${mono ? 'font-mono' : ''} break-all`}>
-        {value || '—'}
-      </p>
-    </div>
-  );
-}
-
-function formatDateTime(iso?: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
+import type { CronJob, CronJobInput, TurnStats } from '@/lib/types/admin';
+import { InfoRow } from '@/components/admin/info-row';
+import { formatDateTime } from '@/lib/format-time';
+import { getErrorMessage } from '@/lib/get-error-message';
 
 // ---------------------------------------------------------------------------
 // Page Component
@@ -61,6 +35,14 @@ export default function CronDetailPage() {
   const [triggering, setTriggering] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+  // Inline action errors
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Inline confirmations
+  const [confirmToggle, setConfirmToggle] = useState(false);
+  const [confirmTrigger, setConfirmTrigger] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // History states
   const [history, setHistory] = useState<TurnStats | null>(null);
@@ -90,7 +72,7 @@ export default function CronDetailPage() {
         setHasChanges(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load cron job');
+      setError(getErrorMessage(err, 'Failed to load cron job'));
     } finally {
       setLoading(false);
     }
@@ -103,18 +85,8 @@ export default function CronDetailPage() {
       setHistoryError(null);
       const data = await getCronRunHistory(id);
       setHistory(data);
-    } catch (err: any) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      if (
-        errMsg.toLowerCase().includes('no events found') ||
-        errMsg.toLowerCase().includes('not found') ||
-        errMsg.includes('500') ||
-        errMsg.includes('404')
-      ) {
-        setHistory(null);
-      } else {
-        setHistoryError(errMsg);
-      }
+    } catch (err) {
+      setHistoryError(getErrorMessage(err, 'Failed to load run history'));
     } finally {
       setHistoryLoading(false);
     }
@@ -153,7 +125,8 @@ export default function CronDetailPage() {
     if (!job || !hasChanges) return;
     try {
       setSaving(true);
-      const updates: Partial<CronJob> = {};
+      setActionError(null);
+      const updates: Partial<CronJobInput> = {};
       if (schedule !== job.schedule) updates.schedule = schedule;
       if (message !== job.message) updates.message = message;
       if (maxRuns !== (job.max_runs != null ? String(job.max_runs) : '')) {
@@ -164,7 +137,7 @@ export default function CronDetailPage() {
       setJob((prev) => (prev ? { ...prev, ...updates } : prev));
       setHasChanges(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update cron job');
+      setActionError(getErrorMessage(err, 'Failed to update cron job'));
     } finally {
       setSaving(false);
     }
@@ -173,16 +146,16 @@ export default function CronDetailPage() {
   const handleToggle = async () => {
     if (!job) return;
     const next = !enabled;
-    const label = next ? 'enable' : 'disable';
-    if (!window.confirm(`${next ? 'Enable' : 'Disable'} cron job "${job.name}"?`)) return;
+    setConfirmToggle(false);
     try {
       setSaving(true);
+      setActionError(null);
       await updateCronJob(job.id, { enabled: next });
       setJob((prev) => (prev ? { ...prev, enabled: next } : prev));
       setEnabled(next);
       setHasChanges(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : `Failed to ${label} cron job`);
+      setActionError(getErrorMessage(err, `Failed to ${next ? 'enable' : 'disable'} cron job`));
     } finally {
       setSaving(false);
     }
@@ -190,15 +163,16 @@ export default function CronDetailPage() {
 
   const handleTrigger = async () => {
     if (!job) return;
-    if (!window.confirm(`Manually trigger cron job "${job.name}"?`)) return;
+    setConfirmTrigger(false);
     try {
       setTriggering(true);
+      setActionError(null);
       await triggerCronJob(job.id);
       setTimeout(() => {
         loadHistory();
       }, 1000);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to trigger cron job');
+      setActionError(getErrorMessage(err, 'Failed to trigger cron job'));
     } finally {
       setTriggering(false);
     }
@@ -206,13 +180,14 @@ export default function CronDetailPage() {
 
   const handleDelete = async () => {
     if (!job) return;
-    if (!window.confirm(`Delete cron job "${job.name}" permanently? This cannot be undone.`)) return;
+    setConfirmDelete(false);
     try {
       setDeleting(true);
+      setActionError(null);
       await deleteCronJob(job.id);
       router.push('/admin/cron');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete cron job');
+      setActionError(getErrorMessage(err, 'Failed to delete cron job'));
       setDeleting(false);
     }
   };
@@ -325,60 +300,131 @@ export default function CronDetailPage() {
         Back to Cron Jobs
       </Link>
 
+      {/* Action error banner */}
+      {actionError && (
+        <div className="mb-4 rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-3 flex items-center justify-between animate-fade-in">
+          <p className="text-sm text-[var(--accent-coral)]">{actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-xs font-medium text-[var(--accent-coral)] underline underline-offset-2 hover:text-[var(--accent-coral)]/80 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-display font-bold text-[var(--text-primary)]">
             {job.name}
           </h1>
-          <button
-            onClick={handleToggle}
-            disabled={saving}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              enabled
-                ? 'bg-[var(--accent-emerald)]'
-                : 'bg-[var(--text-faint)]/30'
-            }`}
-            title={enabled ? 'Disable' : 'Enable'}
-          >
-            <span
-              className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
-                enabled ? 'translate-x-4' : 'translate-x-0.5'
+          {confirmToggle ? (
+            <div className="flex items-center gap-1 animate-fade-in">
+              <button
+                onClick={handleToggle}
+                disabled={saving}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                  enabled
+                    ? 'bg-[var(--accent-coral)] text-white hover:bg-[var(--accent-coral-bright)]'
+                    : 'bg-[var(--accent-emerald)] text-black hover:bg-[var(--accent-emerald-bright)]'
+                } disabled:opacity-40`}
+              >
+                {enabled ? 'Disable!' : 'Enable!'}
+              </button>
+              <button
+                onClick={() => setConfirmToggle(false)}
+                className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-hover)] text-[var(--text-muted)]"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmToggle(true)}
+              disabled={saving}
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                enabled
+                  ? 'bg-[var(--accent-emerald)]'
+                  : 'bg-[var(--text-faint)]/30'
               }`}
-            />
-          </button>
+              title={enabled ? 'Disable' : 'Enable'}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                  enabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Trigger */}
-          <button
-            onClick={handleTrigger}
-            disabled={triggering || !job.enabled}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-bold uppercase tracking-wider text-[var(--accent-gold)] bg-[var(--accent-gold)]/10 hover:bg-[var(--accent-gold)]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {triggering ? (
-              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
-              </svg>
-            )}
-            Trigger
-          </button>
+          {confirmTrigger ? (
+            <div className="flex items-center gap-1 animate-fade-in">
+              <button
+                onClick={handleTrigger}
+                disabled={triggering}
+                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--accent-gold)] text-black hover:bg-[var(--accent-gold-bright)] disabled:opacity-40"
+              >
+                Run!
+              </button>
+              <button
+                onClick={() => setConfirmTrigger(false)}
+                className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-hover)] text-[var(--text-muted)]"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmTrigger(true)}
+              disabled={triggering || !job.enabled}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-bold uppercase tracking-wider text-[var(--accent-gold)] bg-[var(--accent-gold)]/10 hover:bg-[var(--accent-gold)]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {triggering ? (
+                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+                </svg>
+              )}
+              Trigger
+            </button>
+          )}
           {/* Delete */}
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-bold uppercase tracking-wider text-[var(--accent-coral)] bg-[rgba(244,63,94,0.08)] hover:bg-[rgba(244,63,94,0.15)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {deleting ? (
-              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-              </svg>
-            )}
-            Delete
-          </button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1 animate-fade-in">
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--accent-coral)] text-white hover:bg-[var(--accent-coral-bright)] disabled:opacity-40"
+              >
+                Del!
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--bg-hover)] text-[var(--text-muted)]"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-bold uppercase tracking-wider text-[var(--accent-coral)] bg-[rgba(244,63,94,0.08)] hover:bg-[rgba(244,63,94,0.15)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {deleting ? (
+                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+              )}
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
@@ -601,7 +647,7 @@ export default function CronDetailPage() {
                   <span className="text-xs font-mono font-medium text-[var(--text-primary)]">
                     #{turnItem.turn_num}
                   </span>
-                  
+
                   <span className="text-xs font-mono text-[var(--text-muted)]">
                     {turnItem.seq}
                   </span>

@@ -3,10 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminUrl } from '@/lib/config';
-
-interface LoginPageProps {
-  // login is injected via AdminLayout context — we import useAdminAuth directly
-}
+import { testConnectionVerbose, storeAdminConnection } from '@/lib/api/admin-client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,7 +20,6 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { testConnectionVerbose, storeAdminConnection } = await import('@/lib/api/admin-client');
       const res = await testConnectionVerbose({ url: url.trim(), token: token.trim() });
       if (res.ok) {
         storeAdminConnection({ url: url.trim(), token: token.trim() });
@@ -37,8 +33,9 @@ export default function LoginPage() {
           setError(`Connection failed: ${res.error || 'Unknown error'}`);
         }
       }
-    } catch (err: any) {
-      setError(`Connection failed. Check the URL and token. Error: ${err?.message || err}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Connection failed. Check the URL and token. Error: ${msg}`);
     } finally {
       setLoading(false);
     }

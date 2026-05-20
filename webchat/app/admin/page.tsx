@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { listBots } from '@/lib/api/admin-bots';
 import { listCronJobs } from '@/lib/api/admin-cron';
+import { getAdminStats } from '@/lib/api/admin-stats';
 import { MetricCard } from '@/components/admin/metric-card';
 
 interface DashboardMetrics {
@@ -41,8 +42,6 @@ function useDashboardMetrics(refreshTrigger: number) {
       try {
         setLoading(true);
         setError(null);
-
-        const { getAdminStats } = await import('@/lib/api/admin-stats');
 
         const [botsRes, statsRes, cronRes] = await Promise.allSettled([
           listBots(),

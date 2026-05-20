@@ -4,39 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { listCronJobs, updateCronJob, deleteCronJob, triggerCronJob, createCronJob } from '@/lib/api/admin-cron';
 import { listBots } from '@/lib/api/admin-bots';
-import type { CronJob, BotConfigEntry } from '@/lib/types/admin';
+import type { CronJob, CronJobInput, BotConfigEntry } from '@/lib/types/admin';
+import { formatRelativeTime } from '@/lib/format-time';
+import { getErrorMessage } from '@/lib/get-error-message';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 type FilterOption = 'all' | 'enabled' | 'disabled';
-
-function formatTime(iso?: string): string {
-  if (!iso) return '--';
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHour = Math.floor(diffMs / 3600000);
-  const diffDay = Math.floor(diffMs / 86400000);
-
-  if (diffSec < 0) {
-    // Future time
-    const futureMs = -diffMs;
-    const futureMin = Math.floor(futureMs / 60000);
-    const futureHour = Math.floor(futureMs / 3600000);
-    if (futureMin < 60) return `in ${futureMin}m`;
-    if (futureHour < 24) return `in ${futureHour}h`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
-  if (diffSec < 60) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 // ---------------------------------------------------------------------------
 // Page Component
@@ -50,6 +26,7 @@ export default function CronPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Inline confirmations states
+  const [actionError, setActionError] = useState<string | null>(null);
   const [confirmToggle, setConfirmToggle] = useState<string | null>(null);
   const [confirmTrigger, setConfirmTrigger] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -132,12 +109,13 @@ export default function CronPage() {
     setConfirmToggle(null);
     try {
       setActionLoading(job.id);
+      setActionError(null);
       await updateCronJob(job.id, { enabled: next });
       setJobs((prev) =>
         prev.map((j) => (j.id === job.id ? { ...j, enabled: next } : j)),
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to toggle cron job');
+      setActionError(getErrorMessage(err, 'Failed to toggle cron job'));
     } finally {
       setActionLoading(null);
     }
@@ -147,9 +125,10 @@ export default function CronPage() {
     setConfirmTrigger(null);
     try {
       setActionLoading(id);
+      setActionError(null);
       await triggerCronJob(id);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to trigger cron job');
+      setActionError(getErrorMessage(err, 'Failed to trigger cron job'));
     } finally {
       setActionLoading(null);
     }
@@ -159,10 +138,11 @@ export default function CronPage() {
     setConfirmDelete(null);
     try {
       setActionLoading(id);
+      setActionError(null);
       await deleteCronJob(id);
       setJobs((prev) => prev.filter((j) => j.id !== id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete cron job');
+      setActionError(getErrorMessage(err, 'Failed to delete cron job'));
     } finally {
       setActionLoading(null);
     }
@@ -183,7 +163,7 @@ export default function CronPage() {
       setModalSubmitting(true);
       setModalError(null);
 
-      const jobData: Partial<CronJob> = {
+      const jobData: CronJobInput = {
         name: modalName,
         schedule: modalSchedule,
         message: modalMessage,
@@ -288,6 +268,19 @@ export default function CronPage() {
                 Retry
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Action error banner */}
+        {actionError && (
+          <div className="mb-4 rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-3 flex items-center justify-between animate-fade-in">
+            <p className="text-sm text-[var(--accent-coral)]">{actionError}</p>
+            <button
+              onClick={() => setActionError(null)}
+              className="text-xs font-medium text-[var(--accent-coral)] underline underline-offset-2 hover:text-[var(--accent-coral)]/80 transition-colors"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -440,12 +433,12 @@ export default function CronPage() {
 
                 {/* Last run */}
                 <span className="text-xs text-[var(--text-muted)]" title={job.last_run_at}>
-                  {formatTime(job.last_run_at)}
+                  {formatRelativeTime(job.last_run_at)}
                 </span>
 
                 {/* Next run */}
                 <span className="text-xs text-[var(--text-muted)]" title={job.next_run_at}>
-                  {job.enabled ? formatTime(job.next_run_at) : '--'}
+                  {job.enabled ? formatRelativeTime(job.next_run_at) : '--'}
                 </span>
 
                 {/* Runs count / max */}
