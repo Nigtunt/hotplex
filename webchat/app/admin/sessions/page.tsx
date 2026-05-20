@@ -107,6 +107,9 @@ export default function SessionsPage() {
   const [sort, setSort] = useState<SortOption>('last_active');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  const [confirmTerminate, setConfirmTerminate] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
   const loadSessions = useCallback(async () => {
     try {
       setLoading(true);
@@ -149,8 +152,8 @@ export default function SessionsPage() {
   // Actions
   // ---------------------------------------------------------------------------
 
-  const handleTerminate = async (id: string) => {
-    if (!window.confirm('Terminate this session? The worker will be stopped.')) return;
+  const executeTerminate = async (id: string) => {
+    setConfirmTerminate(null);
     try {
       setActionLoading(id);
       await terminateSession(id);
@@ -164,8 +167,8 @@ export default function SessionsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this session permanently? This cannot be undone.')) return;
+  const executeDelete = async (id: string) => {
+    setConfirmDelete(null);
     try {
       setActionLoading(id);
       await deleteSession(id);
@@ -228,7 +231,7 @@ export default function SessionsPage() {
               disabled={loading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.992 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
               </svg>
               Refresh
@@ -236,24 +239,14 @@ export default function SessionsPage() {
           </div>
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center py-24">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-6 h-6 border-2 border-[var(--accent-gold)] border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-[var(--text-faint)]">Loading sessions...</span>
-            </div>
-          </div>
-        )}
-
         {/* Error */}
         {error && (
-          <div className="rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-4">
+          <div className="mb-6 rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-[var(--accent-coral)]">{error}</p>
               <button
                 onClick={loadSessions}
-                className="text-xs font-medium text-[var(--accent-coral)] underline underline-offset-2 hover:text-[var(--accent-coral)]/80 transition-colors"
+                className="text-xs font-semibold text-[var(--accent-coral)] underline underline-offset-2 hover:text-[var(--accent-coral)]/80 transition-colors"
               >
                 Retry
               </button>
@@ -261,14 +254,52 @@ export default function SessionsPage() {
           </div>
         )}
 
+        {/* Loading Skeletons */}
+        {loading && (
+          <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_100px_100px_90px_100px_100px_140px] gap-2 px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider">ID</span>
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Worker</span>
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider">User</span>
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Status</span>
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Created</span>
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Last Active</span>
+              <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider text-right">Actions</span>
+            </div>
+
+            {/* Table skeleton rows */}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="grid grid-cols-[1fr_100px_100px_90px_100px_100px_140px] gap-2 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 animate-pulse items-center"
+              >
+                <div className="h-3 w-28 bg-[var(--bg-elevated)] rounded"></div>
+                <div className="h-3 w-16 bg-[var(--bg-elevated)] rounded"></div>
+                <div className="h-3 w-16 bg-[var(--bg-elevated)] rounded"></div>
+                <div className="h-4 w-14 bg-[var(--bg-elevated)] rounded-full"></div>
+                <div className="h-3 w-16 bg-[var(--bg-elevated)] rounded"></div>
+                <div className="h-3 w-16 bg-[var(--bg-elevated)] rounded"></div>
+                <div className="flex justify-end gap-1.5">
+                  <div className="h-5 w-12 bg-[var(--bg-elevated)] rounded"></div>
+                  <div className="h-5 w-14 bg-[var(--bg-elevated)] rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Empty state */}
         {!loading && !error && sorted.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-10 w-10 text-[var(--text-faint)] mb-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
-            </svg>
-            <p className="text-sm text-[var(--text-muted)]">
-              {filter !== 'all' ? `No ${filter} sessions found.` : 'No sessions yet.'}
+          <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] p-8">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--bg-hover)] text-[var(--text-faint)]">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">No sessions found</h3>
+            <p className="text-xs text-[var(--text-muted)] max-w-xs">
+              {filter !== 'all' ? `There are no sessions currently matching the "${filter}" filter.` : 'No sessions have been initiated on the gateway yet.'}
             </p>
           </div>
         )}
@@ -328,33 +359,76 @@ export default function SessionsPage() {
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-1.5">
                   {session.state !== 'terminated' && (
-                    <button
-                      onClick={() => handleTerminate(session.id)}
-                      disabled={actionLoading === session.id}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] text-[10px] font-bold uppercase tracking-wider text-[var(--accent-amber)] bg-[rgba(245,158,11,0.1)] hover:bg-[rgba(245,158,11,0.2)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title="Terminate session"
-                    >
-                      {actionLoading === session.id ? (
-                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                    <>
+                      {confirmTerminate === session.id ? (
+                        <div className="flex items-center gap-1 animate-fade-in">
+                          <button
+                            onClick={() => executeTerminate(session.id)}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-[var(--accent-amber)] text-black hover:bg-[var(--accent-amber-bright)]"
+                          >
+                            Stop!
+                          </button>
+                          <button
+                            onClick={() => setConfirmTerminate(null)}
+                            className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-[var(--bg-hover)] text-[var(--text-muted)]"
+                          >
+                            No
+                          </button>
+                        </div>
                       ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3 w-3">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
-                        </svg>
+                        <button
+                          onClick={() => {
+                            setConfirmTerminate(session.id);
+                            setConfirmDelete(null);
+                          }}
+                          disabled={actionLoading === session.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] text-[10px] font-bold uppercase tracking-wider text-[var(--accent-amber)] bg-[rgba(245,158,11,0.1)] hover:bg-[rgba(245,158,11,0.2)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="Terminate session"
+                        >
+                          {actionLoading === session.id && confirmTerminate === session.id ? (
+                            <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3 w-3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+                            </svg>
+                          )}
+                          Stop
+                        </button>
                       )}
-                      Stop
+                    </>
+                  )}
+                  
+                  {confirmDelete === session.id ? (
+                    <div className="flex items-center gap-1 animate-fade-in">
+                      <button
+                        onClick={() => executeDelete(session.id)}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-[var(--accent-coral)] text-white hover:bg-[var(--accent-coral-bright)]"
+                      >
+                        Del!
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-[var(--bg-hover)] text-[var(--text-muted)]"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setConfirmDelete(session.id);
+                        setConfirmTerminate(null);
+                      }}
+                      disabled={actionLoading === session.id}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] text-[10px] font-bold uppercase tracking-wider text-[var(--accent-coral)] bg-[rgba(244,63,94,0.08)] hover:bg-[rgba(244,63,94,0.15)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Delete session"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3 w-3">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                      </svg>
+                      Delete
                     </button>
                   )}
-                  <button
-                    onClick={() => handleDelete(session.id)}
-                    disabled={actionLoading === session.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] text-[10px] font-bold uppercase tracking-wider text-[var(--accent-coral)] bg-[rgba(244,63,94,0.08)] hover:bg-[rgba(244,63,94,0.15)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Delete session"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3 w-3">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                    </svg>
-                    Delete
-                  </button>
                 </div>
               </div>
             ))}

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { listCronJobs, updateCronJob, deleteCronJob, triggerCronJob } from '@/lib/api/admin-cron';
-import type { CronJob } from '@/lib/types/admin';
+import { listCronJobs, updateCronJob, deleteCronJob, triggerCronJob, getCronRunHistory } from '@/lib/api/admin-cron';
+import type { CronJob, TurnStats } from '@/lib/types/admin';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,6 +60,12 @@ export default function CronDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+  // History states
+  const [history, setHistory] = useState<TurnStats | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const loadJob = useCallback(async () => {
     if (!id) {
@@ -90,9 +96,47 @@ export default function CronDetailPage() {
     }
   }, [id]);
 
+  const loadHistory = useCallback(async () => {
+    if (!id) return;
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const data = await getCronRunHistory(id);
+      setHistory(data);
+    } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (
+        errMsg.toLowerCase().includes('no events found') ||
+        errMsg.toLowerCase().includes('not found') ||
+        errMsg.includes('500') ||
+        errMsg.includes('404')
+      ) {
+        setHistory(null);
+      } else {
+        setHistoryError(errMsg);
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     loadJob();
-  }, [loadJob]);
+    loadHistory();
+  }, [loadJob, loadHistory]);
+
+  // Validate schedule format
+  useEffect(() => {
+    if (!schedule) {
+      setScheduleError('Schedule is required');
+      return;
+    }
+    if (!schedule.startsWith('cron:') && !schedule.startsWith('every:') && !schedule.startsWith('at:')) {
+      setScheduleError('Schedule expression must begin with "cron:", "every:", or "at:"');
+    } else {
+      setScheduleError(null);
+    }
+  }, [schedule]);
 
   // Track changes
   useEffect(() => {
@@ -150,6 +194,9 @@ export default function CronDetailPage() {
     try {
       setTriggering(true);
       await triggerCronJob(job.id);
+      setTimeout(() => {
+        loadHistory();
+      }, 1000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to trigger cron job');
     } finally {
@@ -351,6 +398,11 @@ export default function CronDetailPage() {
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--bg-base)] px-3 py-2 text-sm font-mono text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-gold)]/40"
               placeholder="cron:0 9 * * 1-5"
             />
+            {scheduleError && (
+              <p className="text-xs text-[var(--accent-coral)] mt-1 font-semibold animate-fade-in">
+                {scheduleError}
+              </p>
+            )}
           </div>
 
           {/* Message */}
@@ -387,7 +439,7 @@ export default function CronDetailPage() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !!scheduleError}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-sm)] text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] text-black hover:bg-[var(--accent-gold-bright)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving ? (
@@ -413,7 +465,7 @@ export default function CronDetailPage() {
 
       {/* Read-only info cards */}
       <h2 className="text-xs font-bold text-[var(--text-faint)] uppercase tracking-wider mb-3">Details</h2>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 mb-8">
         <InfoRow label="ID" value={job.id} mono />
         <InfoRow label="Owner ID" value={job.owner_id ?? ''} mono />
         <InfoRow label="Bot ID" value={job.bot_id ?? ''} mono />
@@ -424,6 +476,168 @@ export default function CronDetailPage() {
         />
         <InfoRow label="Last Run" value={formatDateTime(job.last_run_at)} />
         <InfoRow label="Next Run" value={job.enabled ? formatDateTime(job.next_run_at) : '—'} />
+      </div>
+
+      {/* Execution History Section */}
+      <div className="mt-8 border-t border-[var(--border-subtle)] pt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-bold text-[var(--text-faint)] uppercase tracking-wider">
+            Execution History (Latest Run)
+          </h2>
+          <button
+            onClick={loadHistory}
+            disabled={historyLoading}
+            className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-gold)] hover:underline transition-all disabled:opacity-40"
+          >
+            Refresh History
+          </button>
+        </div>
+
+        {/* History Loading Skeletons */}
+        {historyLoading && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] animate-pulse h-16"></div>
+              ))}
+            </div>
+            <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
+              <div className="grid grid-cols-[80px_100px_90px_100px_1fr_120px] gap-2 px-4 py-2.5 bg-[var(--bg-elevated)] border-b border-[var(--border-subtle)]">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="h-2 w-12 bg-[var(--bg-hover)] rounded"></div>
+                ))}
+              </div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="grid grid-cols-[80px_100px_90px_100px_1fr_120px] gap-2 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 animate-pulse">
+                  <div className="h-3 w-8 bg-[var(--bg-hover)] rounded"></div>
+                  <div className="h-3 w-16 bg-[var(--bg-hover)] rounded"></div>
+                  <div className="h-3.5 w-14 bg-[var(--bg-hover)] rounded-full"></div>
+                  <div className="h-3 w-10 bg-[var(--bg-hover)] rounded"></div>
+                  <div className="h-3 w-28 bg-[var(--bg-hover)] rounded"></div>
+                  <div className="h-3 w-12 bg-[var(--bg-hover)] rounded ml-auto"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* History Error */}
+        {!historyLoading && historyError && (
+          <div className="rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-4 mb-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-[var(--accent-coral)]">{historyError}</p>
+              <button
+                onClick={loadHistory}
+                className="text-xs font-medium text-[var(--accent-coral)] underline underline-offset-2 hover:text-[var(--accent-coral)]/80 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* History Empty State */}
+        {!historyLoading && !historyError && (!history || !history.turns || history.turns.length === 0) && (
+          <div className="flex flex-col items-center justify-center py-12 text-center rounded-[var(--radius-md)] border border-dashed border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-[var(--text-faint)] mb-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <p className="text-sm text-[var(--text-muted)] font-medium">No execution history found for this job yet.</p>
+          </div>
+        )}
+
+        {/* History Content */}
+        {!historyLoading && !historyError && history && history.turns && history.turns.length > 0 && (
+          <div className="space-y-4">
+            {/* Aggregated stats cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">Success Rate</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">
+                  <span className={history.failed_turns > 0 ? 'text-[var(--accent-coral)]' : 'text-[var(--accent-emerald)]'}>
+                    {history.success_turns}
+                  </span>
+                  <span className="text-[var(--text-muted)] font-normal text-xs"> / {history.total_turns} turns</span>
+                </p>
+              </div>
+
+              <div className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">Total Duration</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">{history.total_duration_ms}ms</p>
+              </div>
+
+              <div className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">Total Cost</p>
+                <p className="text-sm font-mono font-bold text-[var(--text-primary)]">${history.total_cost_usd.toFixed(4)}</p>
+              </div>
+
+              <div className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                <p className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wider mb-1">Total Tokens</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">
+                  {history.total_tokens_in + history.total_tokens_out}
+                  <span className="text-[var(--text-muted)] font-normal text-xs"> (In: {history.total_tokens_in} / Out: {history.total_tokens_out})</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Turns Table */}
+            <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
+              {/* Header */}
+              <div className="grid grid-cols-[80px_100px_90px_100px_1fr_120px] gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+                <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Turn</span>
+                <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Seq</span>
+                <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Status</span>
+                <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Duration</span>
+                <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider">Tokens (In / Out / Cache)</span>
+                <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wider text-right">Cost</span>
+              </div>
+
+              {/* Rows */}
+              {history.turns.map((turnItem) => (
+                <div
+                  key={turnItem.seq}
+                  className="grid grid-cols-[80px_100px_90px_100px_1fr_120px] gap-2 px-4 py-2 border-b border-[var(--border-subtle)] last:border-b-0 hover:bg-[var(--bg-hover)] transition-colors items-center"
+                >
+                  <span className="text-xs font-mono font-medium text-[var(--text-primary)]">
+                    #{turnItem.turn_num}
+                  </span>
+                  
+                  <span className="text-xs font-mono text-[var(--text-muted)]">
+                    {turnItem.seq}
+                  </span>
+
+                  <span
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+                      turnItem.success ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-coral)]'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${turnItem.success ? 'bg-[var(--accent-emerald)]' : 'bg-[var(--accent-coral)]'}`} />
+                    {turnItem.success ? 'Success' : 'Failed'}
+                  </span>
+
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {turnItem.duration_ms}ms
+                  </span>
+
+                  <div className="flex flex-col text-[11px] text-[var(--text-muted)] leading-tight">
+                    <div>
+                      In: <span className="text-[var(--text-primary)] font-mono">{turnItem.tokens_in}</span> / Out: <span className="text-[var(--text-primary)] font-mono">{turnItem.tokens_out}</span>
+                    </div>
+                    { (turnItem.tokens_cache_read > 0 || turnItem.tokens_cache_write > 0) && (
+                      <div className="text-[9px] text-[var(--text-faint)]">
+                        Cache: Read {turnItem.tokens_cache_read} / Write {turnItem.tokens_cache_write}
+                      </div>
+                    )}
+                  </div>
+
+                  <span className="text-xs font-mono text-[var(--text-muted)] text-right">
+                    ${turnItem.cost_usd.toFixed(4)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

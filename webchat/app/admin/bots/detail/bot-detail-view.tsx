@@ -38,11 +38,13 @@ export function BotDetailView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (!name) return;
     let cancelled = false;
     setLoading(true);
+    setError(null);
     getBot(name)
       .then((data: BotConfigEntry) => {
         if (!cancelled) setBot(data);
@@ -54,7 +56,11 @@ export function BotDetailView() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [name]);
+  }, [name, refreshTrigger]);
+
+  const handleRetry = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
   if (!name) {
     return (
@@ -66,10 +72,30 @@ export function BotDetailView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-6 h-6 border-2 border-[var(--accent-gold)] border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-[var(--text-faint)]">Loading bot...</span>
+      <div className="max-w-5xl mx-auto px-6 py-8 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="h-4 w-4 bg-[var(--bg-elevated)] rounded"></div>
+          <div className="h-6 w-36 bg-[var(--bg-elevated)] rounded"></div>
+          <div className="h-5 w-16 bg-[var(--bg-elevated)] rounded-full"></div>
+          <div className="h-5 w-20 bg-[var(--bg-elevated)] rounded-full"></div>
+        </div>
+
+        {/* Tab Bar Skeleton */}
+        <div className="flex gap-4 mb-6 border-b border-[var(--border-subtle)] pb-2">
+          <div className="h-4 w-16 bg-[var(--bg-elevated)] rounded"></div>
+          <div className="h-4 w-16 bg-[var(--bg-elevated)] rounded"></div>
+          <div className="h-4 w-16 bg-[var(--bg-elevated)] rounded"></div>
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex flex-col gap-2">
+              <div className="h-3 w-16 bg-[var(--bg-elevated)] rounded"></div>
+              <div className="h-4 w-40 bg-[var(--bg-elevated)] rounded"></div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -78,8 +104,14 @@ export function BotDetailView() {
   if (error || !bot) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-4">
-          <p className="text-sm text-[var(--accent-coral)]">{error || 'Bot not found'}</p>
+        <div className="rounded-[var(--radius-md)] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.15)] p-6 max-w-sm text-center">
+          <p className="text-sm text-[var(--accent-coral)] mb-4">{error || 'Bot not found'}</p>
+          <button
+            onClick={handleRetry}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-bold uppercase tracking-wider bg-[var(--accent-coral)]/10 text-[var(--accent-coral)] border border-[var(--accent-coral)]/20 hover:bg-[var(--accent-coral)]/20 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );

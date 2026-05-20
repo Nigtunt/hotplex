@@ -5,7 +5,7 @@
  */
 
 import { adminFetch } from './admin-client';
-import type { CronJob } from '@/lib/types/admin';
+import type { CronJob, TurnStats } from '@/lib/types/admin';
 
 export function listCronJobs(): Promise<CronJob[]> {
   return adminFetch<CronJob[]>('/api/cron/jobs');
@@ -28,4 +28,15 @@ export function triggerCronJob(id: string): Promise<void> {
   return adminFetch<void>(`/api/cron/jobs/${encodeURIComponent(id)}/run`, {
     method: 'POST',
   });
+}
+
+export function createCronJob(job: Partial<CronJob>): Promise<void> {
+  return adminFetch<void>('/api/cron/jobs', {
+    method: 'POST',
+    body: JSON.stringify(job),
+  });
+}
+
+export function getCronRunHistory(id: string): Promise<TurnStats> {
+  return adminFetch<TurnStats>(`/api/cron/jobs/${encodeURIComponent(id)}/runs`);
 }

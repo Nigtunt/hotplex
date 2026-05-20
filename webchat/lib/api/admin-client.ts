@@ -57,42 +57,83 @@ export async function adminFetch<T>(
     'Content-Type': 'application/json',
   };
 
-  const res = await fetch(url, {
-    ...options,
-    headers: options?.headers
-      ? { ...headers, ...(options.headers as Record<string, string>) }
-      : headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  if (res.status === 401) {
-    clearAdminConnection();
-    throw new Error('Admin authentication failed (401)');
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: options?.headers
+        ? { ...headers, ...(options.headers as Record<string, string>) }
+        : headers,
+      signal: options?.signal ?? controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (res.status === 401) {
+      clearAdminConnection();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/admin/login?error=session_expired';
+      }
+      throw new Error('Admin authentication failed (401)');
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(body || `Admin request failed: ${res.status}`);
+    }
+
+    if (res.status === 204) {
+      return undefined as unknown as T;
+    }
+
+    return res.json();
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err;
   }
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(body || `Admin request failed: ${res.status}`);
-  }
-
-  if (res.status === 204) {
-    return undefined as unknown as T;
-  }
-
-  return res.json();
 }
 
 // ---------------------------------------------------------------------------
 // Connection test
 // ---------------------------------------------------------------------------
 
-export async function testConnection(conn: AdminConnection): Promise<boolean> {
+export type TestConnectionResult = {
+  ok: boolean;
+  type: 'success' | 'network_error' | 'auth_error' | 'other_error';
+  error?: string;
+};
+
+export async function testConnectionVerbose(conn: AdminConnection): Promise<TestConnectionResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
   try {
     const url = `${conn.url}/admin/health`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${conn.token}` },
+      signal: controller.signal,
     });
-    return res.ok;
-  } catch {
-    return false;
+    clearTimeout(timeoutId);
+
+    if (res.status === 401) {
+      return { ok: false, type: 'auth_error', error: 'Unauthorized (401)' };
+    }
+    if (!res.ok) {
+      return { ok: false, type: 'other_error', error: `HTTP ${res.status}` };
+    }
+    return { ok: true, type: 'success' };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { ok: false, type: 'network_error', error: 'Timeout (10s reached)' };
+    }
+    return { ok: false, type: 'network_error', error: err.message || 'Network unreachable' };
   }
+}
+
+export async function testConnection(conn: AdminConnection): Promise<boolean> {
+  const res = await testConnectionVerbose(conn);
+  return res.ok;
 }

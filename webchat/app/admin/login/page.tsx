@@ -23,16 +23,22 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { testConnection, storeAdminConnection } = await import('@/lib/api/admin-client');
-      const ok = await testConnection({ url: url.trim(), token: token.trim() });
-      if (ok) {
+      const { testConnectionVerbose, storeAdminConnection } = await import('@/lib/api/admin-client');
+      const res = await testConnectionVerbose({ url: url.trim(), token: token.trim() });
+      if (res.ok) {
         storeAdminConnection({ url: url.trim(), token: token.trim() });
         router.replace('/admin');
       } else {
-        setError('Connection failed. Check the URL and token.');
+        if (res.type === 'auth_error') {
+          setError('Incorrect token. Please check that your Admin Token is valid and matches the one configured on your gateway.');
+        } else if (res.type === 'network_error') {
+          setError('Unable to connect to the gateway. Please verify that the gateway is running and that port 9999 (or your configured port) is correct and open.');
+        } else {
+          setError(`Connection failed: ${res.error || 'Unknown error'}`);
+        }
       }
-    } catch {
-      setError('Connection failed. Check the URL and token.');
+    } catch (err: any) {
+      setError(`Connection failed. Check the URL and token. Error: ${err?.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -84,9 +90,12 @@ export default function LoginPage() {
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="http://localhost:9090"
+                placeholder="http://localhost:9999"
                 className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-faint)] outline-none transition-colors focus:border-[var(--accent-gold)]/40 focus:ring-1 focus:ring-[var(--accent-gold)]/20"
               />
+              <p className="mt-1.5 text-xs text-[var(--text-muted)] opacity-80">
+                Tip: The default gateway port is <span className="font-semibold text-[var(--accent-gold)]">9999</span>.
+              </p>
             </div>
 
             <div>
@@ -108,7 +117,9 @@ export default function LoginPage() {
 
             {/* Error */}
             {error && (
-              <p className="text-sm text-[var(--accent-coral)]">{error}</p>
+              <div className="rounded-lg border border-[var(--accent-coral)]/20 bg-[var(--accent-coral)]/5 p-3 text-xs text-[var(--accent-coral)] leading-normal">
+                {error}
+              </div>
             )}
 
             {/* Submit */}

@@ -87,10 +87,60 @@ export interface CronJob {
   expires_at?: string;
 }
 
+export interface TurnStatItem {
+  turn_num: number;
+  seq: number;
+  success: boolean;
+  duration_ms: number;
+  cost_usd: number;
+  tokens_in: number;
+  tokens_input: number;
+  tokens_cache_write: number;
+  tokens_cache_read: number;
+  tokens_out: number;
+  model: string;
+  source: string;
+  created_at: number;
+}
+
+export interface TurnStats {
+  session_id: string;
+  generation: number;
+  total_turns: number;
+  success_turns: number;
+  failed_turns: number;
+  total_duration_ms: number;
+  total_cost_usd: number;
+  total_tokens_in: number;
+  total_tokens_input: number;
+  total_tokens_cache_write: number;
+  total_tokens_cache_read: number;
+  total_tokens_out: number;
+  turns: TurnStatItem[];
+}
+
 // --- Stats ---
 
 export interface GatewayStats {
   uptime_seconds: number;
-  total_sessions: number;
-  active_sessions: number;
+  websocket_connections: number;
+  sessions_active: number;
+  sessions_total: number;
+}
+
+export interface WorkerStats {
+  sessions: number;
+  avg_memory_mb: number;
+  avg_cpu_percent: number;
+}
+
+export interface DatabaseStats {
+  sessions_count: number;
+  db_size_mb: number;
+}
+
+export interface GatewayStatsResponse {
+  gateway: GatewayStats;
+  workers: Record<string, WorkerStats>;
+  database: DatabaseStats;
 }

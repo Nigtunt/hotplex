@@ -105,4 +105,4 @@ export function httpBase(): string {
 // -- Admin -----------------------------------------------------------------
 
 export const adminUrl: string =
-  process.env.HOTPLEX_WEBCHAT_ADMIN_URL ?? 'http://localhost:9090';
+  process.env.HOTPLEX_WEBCHAT_ADMIN_URL ?? 'http://localhost:9999';
