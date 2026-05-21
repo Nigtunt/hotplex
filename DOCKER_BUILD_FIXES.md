@@ -92,3 +92,24 @@ func normalizePath(p string) string {
 **修复**：
 1. `apk add` 列表加 `bash`
 2. 添加 `ENV SHELL=/bin/bash`
+
+---
+
+## 修复七：Docker HEALTHCHECK 调用 `/admin/health/ready` 一直返回 401
+
+**现象**：容器启动后日志每 30 秒打印：
+```
+"msg":"admin: request" "method":"GET" "path":"/admin/health/ready" "status":401 "duration":14601 "ip":"::1"
+```
+
+**原因**：`AdminAPI.Middleware` 对所有路径（包括 `/admin/health/ready`）都强制要求 admin token。Docker HEALTHCHECK（`curl -f http://localhost:9999/admin/health/ready`）不带 token 调用，每次都被拒绝。文档标注该端点"无需认证"但中间件未豁免。
+
+**修复**：`internal/admin/admin.go` 中间件中，在 token 验证前对 `/admin/health/ready` 路径放行：
+
+```go
+// readiness probe — no auth required (Docker HEALTHCHECK / K8s readinessProbe)
+if r.URL.Path == "/admin/health/ready" {
+    next.ServeHTTP(sw, r)
+    return
+}
+```
