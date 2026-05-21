@@ -38,11 +38,21 @@ export function useAdminAuth() {
     return false;
   }, []);
 
+  const checkAuth = useCallback(() => {
+    const stored = getStoredAdminConnection();
+    if (stored) {
+      setConn(stored);
+      setState('authenticated');
+    } else {
+      setState('unauthenticated');
+    }
+  }, []);
+
   const logout = useCallback(() => {
     clearAdminConnection();
     setConn(null);
     setState('unauthenticated');
   }, []);
 
-  return { state, conn, login, logout };
+  return { state, conn, login, logout, checkAuth };
 }

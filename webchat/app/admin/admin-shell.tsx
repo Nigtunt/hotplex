@@ -1,19 +1,32 @@
 'use client';
 
+import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
+import { getStoredAdminConnection } from '@/lib/api/admin-client';
 import { AdminNav } from '@/components/admin/admin-nav';
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { state, logout } = useAdminAuth();
+  const { state, logout, checkAuth } = useAdminAuth();
+
+  // Sync hook state with localStorage whenever pathname changes
+  useEffect(() => {
+    checkAuth();
+  }, [pathname, checkAuth]);
   const isLoginPage = pathname === '/admin/login';
 
-  // Unauthenticated and not on login page -> redirect
+  // Unauthenticated and not on login page -> redirect.
+  // Guard with a synchronous localStorage read so that a login page that
+  // just stored credentials (before the hook re-reads) won't be kicked back.
   if (state === 'unauthenticated' && !isLoginPage) {
-    router.replace('/admin/login');
-    return null;
+    const stored = getStoredAdminConnection();
+    if (!stored) {
+      router.replace('/admin/login');
+      return null;
+    }
+    // credentials exist — let the next render pick them up via the hook
   }
 
   // Checking auth state -> show spinner

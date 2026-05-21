@@ -65,7 +65,7 @@ function useDashboardMetrics(refreshTrigger: number) {
         };
 
         if (botsRes.status === 'fulfilled') {
-          const bots = botsRes.value;
+          const bots = botsRes.value ?? [];
           m.botsTotal = bots.length;
           m.botsConnected = bots.filter((b) => b.status === 'connected').length;
           m.botsDisconnected = bots.filter((b) => b.status !== 'connected').length;
@@ -74,15 +74,17 @@ function useDashboardMetrics(refreshTrigger: number) {
 
         if (statsRes.status === 'fulfilled') {
           const stats = statsRes.value;
-          m.sessionsTotal = stats.gateway.sessions_total;
-          m.sessionsActive = stats.gateway.sessions_active;
-          m.sessionsDatabase = stats.database.sessions_count;
-          m.uptimeSeconds = stats.gateway.uptime_seconds;
-          m.gatewayOnline = true;
+          if (stats) {
+            m.sessionsTotal = stats.gateway.sessions_total;
+            m.sessionsActive = stats.gateway.sessions_active;
+            m.sessionsDatabase = stats.database.sessions_count;
+            m.uptimeSeconds = stats.gateway.uptime_seconds;
+            m.gatewayOnline = true;
+          }
         }
 
         if (cronRes.status === 'fulfilled') {
-          const jobs = cronRes.value;
+          const jobs = cronRes.value ?? [];
           m.cronTotal = jobs.length;
           m.cronEnabled = jobs.filter((j) => j.enabled).length;
           m.gatewayOnline = true;

@@ -9,26 +9,74 @@ interface SettingsModalProps {
   onSaved?: () => void;
 }
 
+/** Derive HTTP base URL from a WebSocket URL for API calls. */
+function wsToHttp(wsUrl: string): string {
+  return wsUrl
+    .replace(/^ws:\/\//, 'http://')
+    .replace(/^wss:\/\//, 'https://')
+    .replace(/\/ws\/?$/, '');
+}
+
 export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
   const { apiKey, wsUrl, setApiKey, setWsUrl } = useChatConfig();
 
   const [draftKey, setDraftKey] = useState(apiKey);
   const [draftUrl, setDraftUrl] = useState(wsUrl);
   const [saved, setSaved] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setDraftKey(apiKey);
       setDraftUrl(wsUrl);
       setSaved(false);
+      setValidationError(null);
     }
   }, [open, apiKey, wsUrl]);
 
   if (!open) return null;
 
-  const handleSave = () => {
-    setApiKey(draftKey.trim());
-    setWsUrl(draftUrl.trim());
+  const handleSave = async () => {
+    const key = draftKey.trim();
+    const url = draftUrl.trim();
+
+    setValidationError(null);
+    setValidating(true);
+
+    try {
+      // Validate the API Key by making a test request
+      const httpUrl = wsToHttp(url || wsUrl);
+      const res = await fetch(`${httpUrl}/api/sessions`, {
+        headers: { 'X-API-Key': key },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (res.status === 401) {
+        setValidationError('API Key is invalid. The server rejected authentication.');
+        setValidating(false);
+        return;
+      }
+
+      if (!res.ok && res.status !== 200) {
+        setValidationError(`Server responded with HTTP ${res.status}. Please check the WebSocket URL.`);
+        setValidating(false);
+        return;
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('AbortError') || msg.includes('timeout')) {
+        setValidationError('Connection timed out. Please check that the gateway is running and the WebSocket URL is correct.');
+      } else {
+        setValidationError(`Cannot reach the gateway: ${msg}`);
+      }
+      setValidating(false);
+      return;
+    }
+
+    setValidating(false);
+    setApiKey(key);
+    setWsUrl(url);
     setSaved(true);
     onSaved?.();
     setTimeout(() => setSaved(false), 2000);
@@ -100,6 +148,13 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
           </p>
         </div>
 
+        {/* Validation error */}
+        {validationError && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.2)] text-xs text-[var(--accent-coral)] font-medium animate-fade-in">
+            {validationError}
+          </div>
+        )}
+
         {/* Saved indicator */}
         {saved && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] text-xs text-[var(--accent-emerald)] font-medium flex items-center gap-2">
@@ -127,9 +182,17 @@ export function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
             </button>
             <button
               onClick={handleSave}
-              className="px-5 py-2 text-xs font-bold text-black bg-[var(--accent-gold)] hover:bg-[var(--accent-gold)]/90 rounded-lg shadow-[0_4px_16px_rgba(251,191,36,0.15)] active:scale-95 transition-all"
+              disabled={validating}
+              className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-black bg-[var(--accent-gold)] hover:bg-[var(--accent-gold)]/90 rounded-lg shadow-[0_4px_16px_rgba(251,191,36,0.15)] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save & Reconnect
+              {validating ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Validating...
+                </>
+              ) : (
+                'Save & Reconnect'
+              )}
             </button>
           </div>
         </div>

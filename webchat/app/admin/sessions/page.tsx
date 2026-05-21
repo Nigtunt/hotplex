@@ -102,7 +102,7 @@ export default function SessionsPage() {
       setLoading(true);
       setError(null);
       const data = await listSessions(100, 0);
-      setSessions(data.sessions);
+      setSessions(data?.sessions ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sessions');
     } finally {

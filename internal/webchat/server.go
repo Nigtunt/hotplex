@@ -21,7 +21,7 @@ func securityHeaders(next http.Handler) http.Handler {
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline'; "+
-				"connect-src 'self' ws://localhost:* wss://*; "+
+				"connect-src 'self' http://localhost:* ws://localhost:* wss://*; "+
 				"img-src 'self' data: blob:; "+
 				"font-src 'self' data:")
 		next.ServeHTTP(w, r)
@@ -50,6 +50,16 @@ func Handler() http.Handler {
 		// Try exact file match (favicon.ico, robots.txt, etc.).
 		relPath := strings.TrimPrefix(path, "/")
 		if relPath != "" {
+			// Next.js static export produces .html files for all routes.
+			// Try relPath + ".html" first to avoid directory/file name
+			// collisions (e.g. admin.html vs admin/ directory).
+			htmlPath := relPath + ".html"
+			if f, err := spaFS.Open(htmlPath); err == nil {
+				_ = f.Close()
+				r.URL.Path = "/" + htmlPath
+				fileServer.ServeHTTP(w, r)
+				return
+			}
 			if f, err := spaFS.Open(relPath); err == nil {
 				_ = f.Close()
 				fileServer.ServeHTTP(w, r)

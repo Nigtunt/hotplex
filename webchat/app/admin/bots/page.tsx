@@ -20,7 +20,7 @@ export default function BotsPage() {
         setLoading(true);
         setError(null);
         const data = await listBots();
-        if (!cancelled) setBots(data);
+        if (!cancelled) setBots(data ?? []);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load bots');
       } finally {

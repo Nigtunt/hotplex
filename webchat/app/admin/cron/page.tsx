@@ -50,7 +50,7 @@ export default function CronPage() {
       setLoading(true);
       setError(null);
       const data = await listCronJobs();
-      setJobs(data);
+      setJobs(data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load cron jobs');
     } finally {
@@ -61,8 +61,8 @@ export default function CronPage() {
   const loadBots = useCallback(async () => {
     try {
       const data = await listBots();
-      setBots(data);
-      if (data.length > 0) {
+      setBots(data ?? []);
+      if (data && data.length > 0) {
         setModalBotId(data[0].bot_id || data[0].name);
       }
     } catch {
