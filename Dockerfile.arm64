@@ -1,6 +1,6 @@
-# HotPlex Worker Gateway - Production Dockerfile
+# HotPlex Worker Gateway - Production Dockerfile (ARM64)
 #
-# Multi-stage build for production deployment
+# Multi-stage build for ARM64 (aarch64) production deployment
 # Best practices:
 #   - Build stage with full Go toolchain
 #   - Runtime stage with minimal Alpine + necessary runtimes (Node, Python)
@@ -11,7 +11,10 @@
 #
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage 1: Build
+# Build args (must be declared before first FROM to be usable in FROM lines)
+ARG ARCH=arm64
+
+# Stage 1: Build (runs natively, no QEMU — Go cross-compiles to ARM64 at full speed)
 # ─────────────────────────────────────────────────────────────────────────────
 FROM golang:1.26-alpine AS builder
 
@@ -38,10 +41,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 
 # Build with optimizations and version injection
-# Fixed path: ./cmd/hotplex instead of ./cmd/worker
+# GOARCH=arm64 ensures cross-compilation to ARM64 target
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=linux go build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
     -trimpath \
     -ldflags="-s -w \
     -X 'github.com/hrygo/hotplex/internal/version.GitCommit=${GIT_SHA}' \
@@ -52,9 +55,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime
 # ─────────────────────────────────────────────────────────────────────────────
-FROM alpine:3.21
+FROM --platform=linux/${ARCH} alpine:3.21
 
-# Build arguments
+# Build arguments (must be re-declared in each stage)
+ARG ARCH=arm64
 ARG GIT_SHA
 ARG BUILD_TIME
 
@@ -63,7 +67,8 @@ LABEL maintainer="HotPlex Team <support@hotplex.dev>"
 LABEL version="1.16.0"
 LABEL git.sha="${GIT_SHA}"
 LABEL build.time="${BUILD_TIME}"
-LABEL description="HotPlex Worker Gateway - AI Coding Agent access layer"
+LABEL description="HotPlex Worker Gateway - AI Coding Agent access layer (ARM64)"
+LABEL arch="arm64"
 
 # Install runtime dependencies
 # - ca-certificates: TLS/SSL support
@@ -88,7 +93,7 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Install Claude Code CLI globally (npm prefix set for hotplex user)
-RUN npm install -g @anthropic-ai/claude-code@2.1.109
+RUN npm install -g @anthropic-ai/claude-code
 # RUN npm i -g opencode-ai@latest
 
 # Create non-root user
