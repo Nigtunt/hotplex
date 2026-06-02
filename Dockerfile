@@ -22,6 +22,7 @@ WORKDIR /build
 RUN apk add --no-cache git make ca-certificates tzdata
 
 COPY go.mod go.sum ./
+COPY client/go.mod client/go.sum ./client/
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
@@ -52,7 +53,7 @@ RUN arch=$(uname -m) && \
         aarch64) cl_platform="linux-arm64"; op_arch="arm64" ;; \
     esac && \
     GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
-    VERSION=$(curl -fsSL "$GCS_BUCKET/latest") && \
+    VERSION="2.1.109" && \
     curl -fsSL -o /usr/local/bin/claude "$GCS_BUCKET/$VERSION/$cl_platform/claude" && \
     chmod +x /usr/local/bin/claude && \
     (curl -sSL "${GITHUB_PROXY}https://github.com/opencode-ai/opencode/releases/latest/download/opencode-linux-$op_arch.tar.gz" || \
@@ -120,7 +121,8 @@ RUN useradd -m -u ${HOST_UID} -s /bin/bash hotplex && \
     /var/log/hotplex \
     /home/hotplex/.claude \
     /home/hotplex/projects \
-    && chown -R hotplex:hotplex /etc/hotplex /var/lib/hotplex /var/log/hotplex /home/hotplex
+    /run/hotplex \
+    && chown -R hotplex:hotplex /etc/hotplex /var/lib/hotplex /var/log/hotplex /home/hotplex /run/hotplex
 
 # 5. Copy binary and configs
 COPY --from=builder /build/bin/hotplex /usr/local/bin/hotplex
