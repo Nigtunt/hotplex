@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -257,7 +258,7 @@ func cleanLink(dest string) string {
 }
 
 func normalizePath(p string) string {
-	return filepath.Clean(strings.ReplaceAll(p, "\\", "/"))
+	return path.Clean(strings.ReplaceAll(p, "\\", "/"))
 }
 
 var categoryTranslations = map[string]string{

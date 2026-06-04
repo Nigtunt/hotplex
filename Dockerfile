@@ -22,6 +22,7 @@ WORKDIR /build
 RUN apk add --no-cache git make ca-certificates tzdata
 
 COPY go.mod go.sum ./
+COPY client/go.mod client/go.sum ./client/
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
@@ -51,10 +52,11 @@ RUN arch=$(uname -m) && \
         x86_64) cl_platform="linux-x64"; op_arch="x86_64" ;; \
         aarch64) cl_platform="linux-arm64"; op_arch="arm64" ;; \
     esac && \
-    GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
-    VERSION=$(curl -fsSL "$GCS_BUCKET/latest") && \
-    curl -fsSL -o /usr/local/bin/claude "$GCS_BUCKET/$VERSION/$cl_platform/claude" && \
-    chmod +x /usr/local/bin/claude && \
+    # GCS_BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" && \
+    # VERSION="2.1.109" && \
+    # curl -fsSL -o /usr/local/bin/claude "$GCS_BUCKET/$VERSION/$cl_platform/claude" && \
+    # chmod +x /usr/local/bin/claude && \
+    # 注释原因：内网部署环境下 GCS 下载的二进制无法使用，改用运行时阶段 npm 安装
     (curl -sSL "${GITHUB_PROXY}https://github.com/opencode-ai/opencode/releases/latest/download/opencode-linux-$op_arch.tar.gz" || \
      curl -sSL "https://github.com/opencode-ai/opencode/releases/latest/download/opencode-linux-$op_arch.tar.gz") | tar xz -C /usr/local/bin opencode && \
     chmod +x /usr/local/bin/opencode
@@ -95,6 +97,9 @@ COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:24-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
+# Claude Code via npm
+RUN npm i -g @anthropic-ai/claude-code@2.1.109
+
 # 2. Multi-architecture dev tools (gh)
 RUN bash -c 'set -o pipefail && \
     arch=$(uname -m) && \
@@ -109,7 +114,7 @@ RUN bash -c 'set -o pipefail && \
     rm -rf /tmp/gh_${gh_version}_linux_${gh_arch}'
 
 # 3. Copy AI tools from collector
-COPY --from=ai-tools-collector /usr/local/bin/claude /usr/local/bin/claude
+# COPY --from=ai-tools-collector /usr/local/bin/claude /usr/local/bin/claude
 COPY --from=ai-tools-collector /usr/local/bin/opencode /usr/local/bin/opencode
 
 # 4. HotPlex user & directories
@@ -120,7 +125,8 @@ RUN useradd -m -u ${HOST_UID} -s /bin/bash hotplex && \
     /var/log/hotplex \
     /home/hotplex/.claude \
     /home/hotplex/projects \
-    && chown -R hotplex:hotplex /etc/hotplex /var/lib/hotplex /var/log/hotplex /home/hotplex
+    /run/hotplex \
+    && chown -R hotplex:hotplex /etc/hotplex /var/lib/hotplex /var/log/hotplex /home/hotplex /run/hotplex
 
 # 5. Copy binary and configs
 COPY --from=builder /build/bin/hotplex /usr/local/bin/hotplex

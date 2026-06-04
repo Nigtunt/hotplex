@@ -53,9 +53,6 @@ configs/permission-hooks-examples.json
 configs/*.yaml
 !configs/config.yaml
 
-# Scripts (not needed in runtime)
-scripts/
-
 # CI/CD
 .github/
 .gitlab-ci.yml
